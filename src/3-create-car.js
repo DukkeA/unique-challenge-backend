@@ -1,30 +1,33 @@
-import { connectSdk } from "./utils/connect-sdk.js";
-import { getRandomInt } from "./utils/random.js";
-import CryptoJS from "crypto-js";
+import { cryptoWaitReady, mnemonicToMiniSecret, sr25519PairFromSeed, sr25519Sign } from '@polkadot/util-crypto';
+import { u8aToHex, stringToU8a, u8aConcat } from '@polkadot/util';
+import { connectSdk } from './utils/connect-sdk.js';
+import { getRandomInt } from './utils/random.js';
 
-// node ./src/create-token.js {collectionId} {address} {nickname}
-// i.e. node ./src/create-token.js 3131 5HRADyd2sEVtpqh3cCdTdvfshMV7oK4xXJyM48i4r9S3TNGH Speedy777
 const createToken = async () => {
   const args = process.argv.slice(2);
   if (args.length < 3) {
-    console.error(
-      "run this command: node ./src/3-create-car.js {collectionId} {address} {nickname}"
-    );
+    console.error("Run this command: node ./src/3-create-car.js {collectionId} {address} {nickname}");
     process.exit(1);
   }
 
-  const [collectionId, owner, nickname] = args;
+  const mnemonic = process.env.MNEMONIC;
+
+  await cryptoWaitReady();
 
   const { account, sdk } = await connectSdk();
+  const { publicKey, secretKey } = sr25519PairFromSeed(mnemonicToMiniSecret(mnemonic));
 
-  const encryptionKey = CryptoJS.SHA256(owner).toString();
+  const message = stringToU8a('Authorize decryption');
+  const signedMessage = sr25519Sign(publicKey, { publicKey, secretKey }, message);
+  const signedMessageHex = u8aToHex(signedMessage);
 
-  const encryptedNickname = CryptoJS.AES.encrypt(
-    nickname,
-    encryptionKey
-  ).toString();
+  const encryptionKey = signedMessage;
+  const [collectionId, owner, nickname] = args;
+  const nicknameBytes = stringToU8a(nickname);
+  
+  const encryptedNicknameBytes = u8aConcat(nicknameBytes, encryptionKey);
+  const encryptedNicknameHex = u8aToHex(encryptedNicknameBytes);
 
-  // Get pseudo-random car image for fun
   const tokenImage =
     getRandomInt(2) === 0
       ? "https://gateway.pinata.cloud/ipfs/QmfWKy52e8pyH1jrLu4hwyAG6iwk6hcYa37DoVe8rdxXwV"
@@ -37,7 +40,7 @@ const createToken = async () => {
     attributes: [
       {
         trait_type: "Nickname",
-        value: encryptedNickname,
+        value: encryptedNicknameHex,
       },
       {
         trait_type: "Victories",
@@ -46,10 +49,6 @@ const createToken = async () => {
       {
         trait_type: "Defeats",
         value: 0,
-      },
-      {
-        trait_type: "Test",
-        value: 1,
       },
     ],
   });
@@ -65,6 +64,6 @@ const createToken = async () => {
 };
 
 createToken().catch((e) => {
-  console.log("Something wrong during token creation");
+  console.log("Something went wrong during token creation");
   throw e;
 });
