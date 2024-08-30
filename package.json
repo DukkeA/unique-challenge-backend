@@ -13,6 +13,7 @@
   "dependencies": {
     "@unique-nft/sdk": "^0.7.7",
     "@unique-nft/sr25519": "^0.0.2",
+    "crypto-js": "^4.2.0",
     "dotenv": "^16.4.5"
   }
 }
